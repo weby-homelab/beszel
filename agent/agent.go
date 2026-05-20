@@ -12,6 +12,7 @@ import (
 
 	"github.com/gliderlabs/ssh"
 	"github.com/henrygd/beszel"
+	"github.com/henrygd/beszel/agent/battery"
 	"github.com/henrygd/beszel/agent/deltatracker"
 	"github.com/henrygd/beszel/agent/utils"
 	"github.com/henrygd/beszel/internal/common"
@@ -157,6 +158,20 @@ func (a *Agent) gatherStats(options common.DataRequestOptions) *system.CombinedD
 
 	cacheTimeMs := options.CacheTimeMs
 	data, isCached := a.cache.Get(cacheTimeMs)
+
+	// Resilience Mode: if on battery power (UPS discharging), throttle stats gathering by returning cached data up to 60s
+	if !isCached {
+		if _, batteryState, err := battery.GetBatteryStats(); err == nil {
+			if batteryState == 4 { // stateDischarging
+				lastUpdate := a.cache.GetLastUpdate(cacheTimeMs)
+				if !lastUpdate.IsZero() && time.Since(lastUpdate) < 60*time.Second {
+					slog.Debug("Resilience Mode: returning cached stats on battery power", "cacheTimeMs", cacheTimeMs)
+					return data
+				}
+			}
+		}
+	}
+
 	if isCached {
 		slog.Debug("Cached data", "cacheTimeMs", cacheTimeMs)
 		return data
