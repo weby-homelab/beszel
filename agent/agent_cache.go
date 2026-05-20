@@ -40,6 +40,16 @@ func (c *systemDataCache) Get(cacheTimeMs uint16) (stats *system.CombinedData, i
 	return node.data, isFresh
 }
 
+// GetLastUpdate returns the timestamp of the last cache update for the given interval.
+func (c *systemDataCache) GetLastUpdate(cacheTimeMs uint16) time.Time {
+	c.RLock()
+	defer c.RUnlock()
+	if node, ok := c.cache[cacheTimeMs]; ok {
+		return node.lastUpdate
+	}
+	return time.Time{}
+}
+
 // Set stores the latest combined data snapshot for the given interval.
 func (c *systemDataCache) Set(data *system.CombinedData, cacheTimeMs uint16) {
 	c.Lock()

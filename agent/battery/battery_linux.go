@@ -77,15 +77,19 @@ func parseSysfsState(status string) uint8 {
 // GetBatteryStats returns the current battery percent and charge state.
 // Reads /sys/class/power_supply/*/capacity directly so the kernel-reported
 // value is used, which is always 0-100 and matches what the OS displays.
+// If no system battery is found, it falls back to checking connected UPS status.
 func GetBatteryStats() (batteryPercent uint8, batteryState uint8, err error) {
 	if !HasReadableBattery() {
-		return batteryPercent, batteryState, errors.ErrUnsupported
+		return GetUPSStats()
 	}
 	paths, err := getBatteryPaths()
-	if err != nil {
-		return batteryPercent, batteryState, err
-	}
-	if len(paths) == 0 {
+	if err != nil || len(paths) == 0 {
+		if pct, state, upsErr := GetUPSStats(); upsErr == nil {
+			return pct, state, nil
+		}
+		if err != nil {
+			return batteryPercent, batteryState, err
+		}
 		return batteryPercent, batteryState, errors.New("no batteries")
 	}
 
@@ -112,6 +116,9 @@ func GetBatteryStats() (batteryPercent uint8, batteryState uint8, err error) {
 	}
 
 	if count == 0 || batteryState == math.MaxUint8 {
+		if pct, state, upsErr := GetUPSStats(); upsErr == nil {
+			return pct, state, nil
+		}
 		return batteryPercent, batteryState, errors.New("no battery capacity")
 	}
 
